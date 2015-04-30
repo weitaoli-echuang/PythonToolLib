@@ -2,12 +2,21 @@
 __author__ = 'VDTConstructor'
 import re
 import logging
-# import urllib
+import os
+import subprocess
 
 from bs4 import BeautifulSoup
 
 
 logging.basicConfig(level=logging.INFO)
+
+
+def delete_files(del_dir):
+	filelist = os.listdir(del_dir)
+	for f in filelist:
+		filepath = os.path.join(del_dir, f)
+		if os.path.isfile(filepath):
+			os.remove(filepath)
 
 
 def get_open_vpn_configure_url(vpn_gate_htm_file):
@@ -62,9 +71,10 @@ def get_open_vpn_configure_url(vpn_gate_htm_file):
 
 
 def get_open_vpn_configure_files(open_vpn_url_file):
-	html_doc = open(open_vpn_url_file, 'r')
-	soup = BeautifulSoup(html_doc)
-	logging.info('the html is %s \n', soup.prettify())
+	# html_doc = open(open_vpn_url_file, 'r')
+	# soup = BeautifulSoup(html_doc)
+	soup = BeautifulSoup(open_vpn_url_file)
+	logging.debug('the html is %s \n', soup.prettify())
 	href_list = [a['href'] for a in soup.findAll('a') if a and a is not None]
 	ovpn_re = re.compile(u'''.ovpn''')
 	for hr in href_list:
@@ -72,21 +82,51 @@ def get_open_vpn_configure_files(open_vpn_url_file):
 			logging.info('%s', hr)
 
 
-def main():
-	# url = 'http://112.173.79.56:45964/cn/'
-	# url_text = urllib.urlopen(url)
-	# vpn_gate_htm_file = 'VPNGate.htm'
-	# fp = open(vpn_gate_htm_file, 'w')
-	# fp.write(url_text.read())
-	# fp.close()
+def get_fqdn(fqdn_text):
+	paras = re.split('''&''', fqdn_text)
+	dict_fqdn = {}
+	for p in paras:
+		p_s = re.split(u'''=''', p)
+		if len(p_s) == 2 and p_s[1] != u'':
+			dict_fqdn[p_s[0]] = p_s[1]
+	return dict_fqdn
 
+
+def form_fqdn(fqdn_dict):
+	fqdn = 'sid=' + fqdn_dict['sid'] + '&tcp=1' + '&host=' + fqdn_dict['ip'] + '&port=' + fqdn_dict['tcp'] + '&hid=' + \
+	       fqdn_dict['hid'] + '&/vpngate_' + fqdn_dict['ip'] + '_tcp_' + fqdn_dict['tcp'] + '.ovpn'
+	return fqdn
+
+
+def form_open_vpn_configure_file_download_address(vpn_url_text_list):
+	open_vpn_tcp_configure_list = [get_fqdn(vpn) for vpn in vpn_url_text_list]
+	return open_vpn_tcp_configure_list
+
+
+def main():
+	vpn_gate_download_web_prefix = 'http://112.173.79.56:45964/common/openvpn_download.aspx?'
 	vpn_gate_htm_file = 'VPNGate.htm'
 	open_vpn_list = get_open_vpn_configure_url(vpn_gate_htm_file)
 	for vpn in open_vpn_list:
 		logging.debug(vpn)
 
-	ovpn_file = 'ovpn.htm'
-	get_open_vpn_configure_files(ovpn_file)
+	configure_dir = 'vpn_config'
+	download_file_list = 'configures_file'
+	if os.path.isdir(configure_dir):
+		delete_files(configure_dir)
+	else:
+		os.mkdir(configure_dir)
+	os.chdir(configure_dir)
+
+	logging.info('getting the download address of open vpn configure files')
+	with open(download_file_list, 'w') as fp:
+		open_vpn_tcp_configure_lis = form_open_vpn_configure_file_download_address(open_vpn_list)
+		download_url_list = [vpn_gate_download_web_prefix + form_fqdn(p) for p in open_vpn_tcp_configure_lis if
+		                     p['tcp'] != u'0']
+		fp.write('\n'.join(download_url_list))
+	logging.info('finish the download')
+	logging.info('the tcp length is %d', len(download_url_list))
+	subprocess.call(['ping', 'localhost'])
 
 
 if __name__ == '__main__':
