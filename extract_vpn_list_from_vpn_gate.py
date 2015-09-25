@@ -7,7 +7,6 @@ import subprocess
 
 from bs4 import BeautifulSoup
 
-
 logging.basicConfig(level=logging.INFO)
 
 
